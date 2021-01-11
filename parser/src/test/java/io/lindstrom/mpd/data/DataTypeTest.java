@@ -1,9 +1,8 @@
 package io.lindstrom.mpd.data;
 
 import io.lindstrom.mpd.MPDParser;
-import io.lindstrom.mpd.support.Utils;
 import org.apache.commons.lang3.reflect.FieldUtils;
-import org.junit.Test;
+import org.junit.jupiter.api.Test;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -13,19 +12,18 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.*;
+import static org.junit.jupiter.api.Assertions.*;
 
 public class DataTypeTest {
     private static final String PACKAGE = DataTypeTest.class.getPackage().getName();
-    private static final Class<?> UNMODIFIABLE_LIST_CLASS = Utils.unmodifiableList(new ArrayList<>()).getClass();
 
     @Test
     public void rebuildMPD() throws Exception {
         MPD mpd = new MPDParser().parse(Files.newInputStream(Paths.get("src/test/resources/random.mpd")));
-        assertEquals(mpd, rebuildAndValidate(mpd));
+        assertEquals(mpd, rebuildAndValidate(mpd, ""));
     }
 
-    private Object rebuildAndValidate(Object object) throws Exception {
+    private Object rebuildAndValidate(Object object, String path) throws Exception {
         if (object == null) {
             return null;
         }
@@ -34,11 +32,12 @@ public class DataTypeTest {
         if (object instanceof List) {
 
             // Make sure that the list is immutable
-            assertEquals("List is immutable", UNMODIFIABLE_LIST_CLASS, object.getClass());
+            String name = object.getClass().getName().split("\\$")[0];
+            assertEquals("java.util.ImmutableCollections", name, "List is immutable " + path);
 
             List<Object> list = new ArrayList<>();
             for (Object member : (List<?>) object) {
-                list.add(rebuildAndValidate(member));
+                list.add(rebuildAndValidate(member, path + "/" + object.getClass().getSimpleName()));
             }
             return list;
         }
@@ -70,7 +69,7 @@ public class DataTypeTest {
                 }
 
                 Object value = getter.invoke(object);
-                Object newValue = rebuildAndValidate(value);
+                Object newValue = rebuildAndValidate(value, path + "/" + method.getName().replace("with", ""));
 
 
                 method.invoke(builder, newValue);
@@ -89,12 +88,12 @@ public class DataTypeTest {
                 continue;
             }
 
-            assertTrue("Field is private", Modifier.isPrivate(modifiers));
-            assertTrue("Field is final", Modifier.isFinal(modifiers));
+            assertTrue(Modifier.isPrivate(modifiers), "Field is private");
+            assertTrue(Modifier.isFinal(modifiers), "Field is final");
 
             Method getter = clazz.getMethod(getterName(field.getName()));
-            assertNotNull("Getter exists", getter);
-            assertTrue("Getter is public", Modifier.isPublic(getter.getModifiers()));
+            assertNotNull(getter, "Getter exists");
+            assertTrue(Modifier.isPublic(getter.getModifiers()), "Getter is public");
         }
 
         // Check that hashCode, toString and equals are defined
